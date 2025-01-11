@@ -39,6 +39,7 @@ std::vector<std::string>
 Polygon boundary_polygon; // Polygon for the region boundary
 std::vector<K::FT> steiner_points_x_2;
 std::vector<K::FT> steiner_points_y_2;
+bool randomization = false;
 
 // Fuction that help us to write the resuls on output file (convert a FT number
 // to a string)
@@ -273,9 +274,7 @@ Point midpoint_edge(const Point &p1, const Point &p2) {
 }
 
 // Simple fuction for putting steiner point in the first obtuse face
-void insert_steiner_points_combined(CDT &cdt, int num_of_obtuse_before,
-                                    Polygon &pol) {
-
+void insert_steiner_points_combined(CDT &cdt, int num_of_obtuse_before, Polygon &pol) {
   for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end();
        ++face) {
     CDT copy1, copy2, copy3, copy4, copy5, copy6;
@@ -410,9 +409,7 @@ void insert_steiner_points_combined(CDT &cdt, int num_of_obtuse_before,
 }
 
 // Check the face has an obtuse neighbor
-bool find_obtuse_neighbor(CDT &cdt, Face_handle face,
-                          Face_handle &obtuse_neighbor,
-                          int &obtuse_neighbor_idx) {
+bool find_obtuse_neighbor(CDT &cdt, Face_handle face, Face_handle &obtuse_neighbor, int &obtuse_neighbor_idx) {
   for (int i = 0; i < 3; ++i) {
     Face_handle neighbor = face->neighbor(i);
     if (!cdt.is_infinite(neighbor)) {
@@ -465,8 +462,7 @@ bool check_if_vertex_constrained(CDT &cdt, CDT::Edge_circulator &c1) {
   return false;
 }
 
-void insert_circumcenter(CDT &cdt, Point p1, Point p2, Point p3,
-                         Polygon &bound) {
+void insert_circumcenter(CDT &cdt, Point p1, Point p2, Point p3, Polygon &bound) {
   Face_handle face;
   for (auto face2 = cdt.finite_faces_begin(); face2 != cdt.finite_faces_end();
        face2++) {
@@ -1056,9 +1052,7 @@ double findheight(Face_handle face) {
   return distance;
 }
 
-bool equal_faces_points(Point f1p1, Point f1p2, Point f1p3, Point f2p1,
-                        Point f2p2, Point f2p3) {
-
+bool equal_faces_points(Point f1p1, Point f1p2, Point f1p3, Point f2p1, Point f2p2, Point f2p3) {
   int count = 0;
 
   if (f1p1 == f2p1 || f1p1 == f2p2 || f1p1 == f2p3) {
@@ -1076,9 +1070,7 @@ bool equal_faces_points(Point f1p1, Point f1p2, Point f1p3, Point f2p1,
   return false;
 }
 
-void track_changed_triangles_and_conflicts(
-    CDT &originalcdt, CDT &newCdt, std::vector<std::vector<Point>> &conflicts,
-    std::vector<int> &array_of_obtuse_am, int num_of_obtuse) {
+void track_changed_triangles_and_conflicts(CDT &originalcdt, CDT &newCdt, std::vector<std::vector<Point>> &conflicts, std::vector<int> &array_of_obtuse_am, int num_of_obtuse) {
   std::vector<Point> changed_faces;
   for (auto face = originalcdt.finite_faces_begin();
        face != originalcdt.finite_faces_end(); face++) {
@@ -1234,8 +1226,7 @@ void track_changed_triangles_and_conflicts(
 //     }
 // }
 
-void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi,
-               double psi, double lambda, int kappa, int L) {
+void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi, double psi, double lambda, int kappa, int L) {
   int cycleamount = 50;
   int bestobtcount = return_obtuse(cdt, pol);
   std::vector<double> phertracker;
@@ -1255,87 +1246,78 @@ void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi,
   // update pheromone
 }
 
-bool check_for_closed_constraints(json::array constraints,
-                                  std::vector<int> region_bound) {
-  std::queue<int> fifo_queue;
-  std::queue<int> prev_queue;
-  std::vector<int> visited;
-  for (const auto &constraint : constraints) {
-    int firstindex = constraint.as_array()[0].as_int64();
-    int secondindex = constraint.as_array()[1].as_int64();
-    int invisited = 0;
-    int boundcount = 0;
-    for (int i = 0; i < visited.size(); i++) {
-      if (firstindex == visited[i]) {
-        invisited = 1;
-      }
-    }
-    if (invisited == 0) {
-      fifo_queue.push(firstindex);
-      prev_queue.push(-1);
-      for (int i = 0; i < region_bound.size(); i++) {
-        if (firstindex == region_bound[i]) {
-          boundcount = 1;
-          break;
-        }
-      }
-    }
+bool check_for_closed_constraints(json::array constraints, std::vector<int> region_bound) {
+    std::queue<int> fifo_queue;
+    std::queue<int> prev_queue;
+    std::unordered_set<int> visited; 
 
-    while (!fifo_queue.empty()) {
-      int index = fifo_queue.front();
-      int topush;
-      fifo_queue.pop();
-      int prev = prev_queue.front();
-      prev_queue.pop();
-      for (const auto &constraint2 : constraints) {
-        int found = 0;
-        int first = constraint2.as_array()[0].as_int64();
-        int second = constraint2.as_array()[1].as_int64();
-        if (first == index) {
+    //Iterate through all constraints
+    for (const auto &constraint : constraints) {
+        int first_index = constraint.as_array()[0].as_int64();
+        int second_index = constraint.as_array()[1].as_int64();
+        bool is_visited = visited.find(first_index) != visited.end();
+        int boundary_cross_count = 0;
 
-          topush = second;
-          found = 1;
-        }
-        if (second == index) {
-          topush = first;
-          found = 1;
-        }
-        if (found == 1) {
-          if (topush != prev) {
+        //If the point has not been visited, start BFS from it
+        if (!is_visited) {
+            fifo_queue.push(first_index);
+            prev_queue.push(-1);
 
-            for (int i = 0; i < visited.size(); i++) {
-              if (topush == visited[i]) {
-                invisited = 1;
-                return true;
-              }
+            //Check if the first index is on the region boundary
+            if (std::find(region_bound.begin(), region_bound.end(), first_index) != region_bound.end()) {
+                boundary_cross_count = 1;
             }
-            int edgeindex1 = 0;
-            for (int i = 0; i < region_bound.size(); i++) {
-              if (topush == region_bound[i]) {
-                edgeindex1++;
-              }
-            }
-            int edgeindex2 = 0;
-            for (int i = 0; i < region_bound.size(); i++) {
-              if (index == region_bound[i]) {
-                edgeindex2++;
-              }
-            }
-            if (edgeindex1 == 1 && edgeindex2 == 0) {
-              boundcount++;
-            }
-            if (boundcount > 1) {
-              return true;
-            }
-            fifo_queue.push(topush);
-            prev_queue.push(index);
-          }
         }
-      }
+
+        //BFS to explore constraints
+        while (!fifo_queue.empty()) {
+            int index = fifo_queue.front();
+            fifo_queue.pop();
+            int prev = prev_queue.front();
+            prev_queue.pop();
+
+            for (const auto &constraint2 : constraints) {
+                int next_point = -1;
+                bool found = false;
+
+                //Determine the next point to explore
+                if (constraint2.as_array()[0].as_int64() == index) {
+                    next_point = constraint2.as_array()[1].as_int64();
+                    found = true;
+                } else if (constraint2.as_array()[1].as_int64() == index) {
+                    next_point = constraint2.as_array()[0].as_int64();
+                    found = true;
+                }
+
+                if (found && next_point != prev) {
+                    //If the point is already visited, a closed constraint is found
+                    if (visited.find(next_point) != visited.end()) {
+                        return true;
+                    }
+
+                    //Check if the next point lies on the boundary
+                    int edge_count_1 = std::count(region_bound.begin(), region_bound.end(), next_point);
+                    int edge_count_2 = std::count(region_bound.begin(), region_bound.end(), index);
+
+                    if (edge_count_1 == 1 && edge_count_2 == 0) {
+                        boundary_cross_count++;
+                    }
+
+                    //If boundary cross count exceeds 1, a closed constraint is found
+                    if (boundary_cross_count > 1) {
+                        return true;
+                    }
+
+                    //Add the next point to the BFS queue
+                    fifo_queue.push(next_point);
+                    prev_queue.push(index);
+                }
+            }
+        }
     }
-  }
-  return false;
+    return false;
 }
+
 
 int main(int argc, char *argv[]) {
   // Check for correct arguments
@@ -1432,75 +1414,109 @@ int main(int argc, char *argv[]) {
       Point(points_x[region_boundary[0]], points_y[region_boundary[0]]),
       Point(points_x[region_boundary[region_boundary.size() - 1]],
             points_y[region_boundary[region_boundary.size() - 1]]));
-  int category = 5; //categorises input
+  int category = 5; // Default to Category 5
   bool res = check_for_closed_constraints(constraints, region_boundary);
+
   if (boundary_polygon.is_convex()) {
     if (num_constraints == 0) {
-      category = 1;
-
-    }
-
-    else if (res == true) {
-      category = 3;
-
+        category = 1;        //Convex boundary without constraints
+    } else if (res == true) {
+        category = 3;     //Convex boundary with closed constraints
     } else {
-      category = 2;
+        category = 2;    //Convex boundary with open constraints
     }
-
   } else {
+    //Check if all boundary segments are parallel to x or y axes
     bool paralleltox_or_y = true;
 
     for (int i = 1; i < region_boundary.size(); i++) {
-      int pointx = points_x[region_boundary[i]] - points_x[region_boundary[i - 1]];
-      int pointy = points_y[region_boundary[i]] - points_y[region_boundary[i - 1]];
-      if (pointx != 0 && pointy != 0) {
-        paralleltox_or_y = false;
-        break;
-      }
+        int pointx = points_x[region_boundary[i]] - points_x[region_boundary[i - 1]];
+        int pointy = points_y[region_boundary[i]] - points_y[region_boundary[i - 1]];
+        if (pointx != 0 && pointy != 0) {
+            paralleltox_or_y = false;
+            break;
+        }
     }
     int regsize = region_boundary.size();
     int pointx = points_x[region_boundary[0]] - points_x[region_boundary[regsize - 1]];
     int pointy = points_y[region_boundary[0]] - points_y[region_boundary[regsize - 1]];
     if (pointx != 0 && pointy != 0) {
-      paralleltox_or_y = false;
+        paralleltox_or_y = false;
     }
+
     if (paralleltox_or_y == true) {
-      category = 4;
+        category = 4;          //Non-convex boundary with axis-parallel segments
+    } else {
+        category = 5;         //Irregular, non-convex boundary
     }
   }
 
-  return 0;
   // Delaunay, method and parameter variebles
   bool delaunay = data.at("delaunay").as_bool();
   std::string method = data.at("method").as_string().c_str();
   const json::object &parameters = data.at("parameters").as_object();
+  std::string new_method;
+  
+  // After classifying the input and determining the category
+  if (category == 1) {
+    printf("Case A: Convex boundary without restrictions.\n");
+    new_method = "local";
+    printf("Choosen method: Local search.\n");
+
+  } else if (category == 2) {
+    printf("Case B: Convex boundary with open constraints.\n");
+    new_method = "sa";
+    printf("Choosen method: Simulated annealing.\n");
+
+  } else if (category == 3) {
+    printf("Case C: Convex boundary with closed constraints.\n");
+    new_method = "sa";
+    printf("Choosen method: Simulated annealing.\n");
+
+  } else if (category == 4) {
+    printf("Case D: Non-convex boundary with straight segments parallel to the axes.\n");
+    new_method = "sa";
+    printf("Choosen method: Simulated annealing.\n");
+
+  } else if (category == 5) {
+    printf("Case E: Non-convex boundary, irregular, not included in categories A-D.\n");
+    new_method = "local";
+    printf("Choosen method: Local search.\n");
+
+  } else {
+    printf("Unknown category. Please check input data.\n");
+  }
 
   int obtuse_count;
-
   if (delaunay == true) {
-    ///////////////////////TEST FLIPPPING////////////////////
     flip_edges(cdt, boundary_polygon);
-    ///////////////////////TEST FLIPPING//////////////////////////
-    ///////////////////////TEST STEINER////////////////////
-    // insert_steiner_point_between_obtuse_neighbors(cdt, boundary_polygon);
-    insert_steiner_points_combined(cdt, return_obtuse(cdt, boundary_polygon),
-                                   boundary_polygon);
-    ///////////////////////TEST STEINER//////////////////////////
+    //insert_steiner_point_between_obtuse_neighbors(cdt, boundary_polygon);
+    insert_steiner_points_combined(cdt, return_obtuse(cdt, boundary_polygon), boundary_polygon);
   }
 
   // If delanay parameter is YES the we use the delanay_original cdt, if is NO
   // we use the cdt that is worked in first part of project Method
-  if (method == "sa") {
+  if (new_method == "sa") {
+
+    if(method == "sa" || method == "ant") {            //An exei dothei sto input.json ws method ontws to sa h to ant tote pernoume ta argouments tou input
     double alpha = parameters.at("alpha").as_double();
     double beta = parameters.at("beta").as_double();
     int L = parameters.at("L").as_int64();
-    printf("%f\n", alpha);
-    printf("%f\n", beta);
-    printf("%d\n", L);
-    sa_method(cdt, boundary_polygon, alpha, beta, L);
+   }
+ 
+    double best_alpha = 5.0;
+    double best_beta = 0.8;
+    int best_L = 200;
+
+    printf("Alpha:%f\n", best_alpha);
+    printf("Beta:%f\n", best_beta);
+    printf("L:%d\n", best_L);
+    sa_method(cdt, boundary_polygon, best_alpha, best_beta, best_L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
 
-  } else if (method == "ant") {
+  } else if (new_method == "ant") {
+
+    if(method == "ant") {
     double alpha = parameters.at("alpha").as_double();
     double beta = parameters.at("beta").as_double();
     double xi = parameters.at("xi").as_double();
@@ -1508,11 +1524,27 @@ int main(int argc, char *argv[]) {
     double lambda = parameters.at("lambda").as_double();
     int kappa = parameters.at("kappa").as_int64();
     int L = parameters.at("L").as_int64();
-    // ant_method(cdt, boundary_polygon, alpha, beta, xi, psi, lambda, kappa,
-    // L);
+   }
+
+    double best_alpha = 4.0;
+    double best_beta = 0.8;
+    double best_xi = 1.0;
+    double best_psi = 3.0;
+    double best_lambda = 0.5;
+    int best_kappa = 10;
+    int best_L = 200;
+
+    printf("Alpha:%f\n", best_alpha);
+    printf("Beta:%f\n", best_beta);
+    printf("Xi:%f\n", best_xi);
+    printf("Psi:%f\n", best_psi);
+    printf("Lambda:%f\n", best_lambda);
+    printf("kappa:%d\n", best_kappa);
+    printf("L:%d\n", best_L);
+    //ant_method(cdt, boundary_polygon, best_alpha, best_beta, best_xi, best_psi, best_lambda, best_kappa, best_L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
 
-  } else if (method == "local") {
+  } else if (new_method == "local") {
     int L = parameters.at("L").as_int64();
     local_method(cdt, boundary_polygon, L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
@@ -1522,7 +1554,8 @@ int main(int argc, char *argv[]) {
     steiner_points_x.push_back(return_rational(steiner_points_x_2[i]));
     steiner_points_y.push_back(return_rational(steiner_points_y_2[i]));
   }
-  std::cout << "Number of obtuse:" << obtuse_count << std::endl;
+  std::cout << "Number of obtuse: " << obtuse_count << std::endl;
+  std::cout << "Number of steiner points: " << steiner_points_x.size() << std::endl;
 
   // Create JSON output
   json::object output;
@@ -1593,12 +1626,14 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-  std::cout << "count is" << count << std::endl;
-  ;
+
+  //std::cout << "Count is: " << count << std::endl;
+
   output["edges"] = edges;
   output["obtuse_count"] = obtuse_count;
   output["method"] = method;
   output["parameters"] = parameters;
+  output["randomization"] = randomization;
 
   std::ofstream output_stream(output_file);
   output_stream.is_open();
