@@ -14,6 +14,8 @@
 #include <queue>
 #include <utility>
 #include <vector>
+#include <chrono>
+#include <random>
 #define CYCLE_MAX 50
 
 typedef CGAL::Exact_predicates_exact_constructions_kernel K;
@@ -772,9 +774,95 @@ void insert_steiner_point_between_obtuse_neighbors(CDT &cdt, Polygon &pol) {
   }
 }
 
+void randomization_insert(CDT &cdt, Polygon &pol) {
+    std::vector<Face_handle> obtuse_faces;
+    for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end(); ++face) {
+        Point p1 = face->vertex(0)->point();
+        Point p2 = face->vertex(1)->point();
+        Point p3 = face->vertex(2)->point();
+        if (is_obtuse(p1, p2, p3)) {
+            obtuse_faces.push_back(face);
+        }
+    }
+
+    if (obtuse_faces.empty()) {
+        printf("No obtuse triangles found.\n");
+        return;
+    }
+
+    //Calculate Gaussian standard deviation based on average triangle size
+    double total_area = 0.0;
+    int triangle_count = 0;
+
+    for (const auto &face : obtuse_faces) {
+        Point p1 = face->vertex(0)->point();
+        Point p2 = face->vertex(1)->point();
+        Point p3 = face->vertex(2)->point();
+
+        //Calculate area of each triangle
+        double area = std::abs(CGAL::to_double(
+            CGAL::area(p1, p2, p3)
+        ));
+        total_area += area;
+        triangle_count++;
+    }
+
+    //Compute Gaussian standard deviation
+    double gaussian_stddev = std::sqrt(total_area / triangle_count) / 2.0;
+
+    //Gaussian random number generator
+    std::random_device rd;
+    boost::random::mt19937 gen(rd());
+    boost::random::normal_distribution<> d(0, gaussian_stddev);
+
+
+    int initial_obtuse = return_obtuse(cdt, pol); //Count initial obtuse triangles
+    int obtuse_reduced = 0;
+
+    for (const auto &face : obtuse_faces) {
+        Point p1 = face->vertex(0)->point();
+        Point p2 = face->vertex(1)->point();
+        Point p3 = face->vertex(2)->point();
+
+        //Calculate the centroid of the triangle
+        Point centroid = CGAL::centroid(p1, p2, p3);
+
+        //Generate a random point near the centroid using Gaussian distribution
+        Point random_point(
+            centroid.x() + d(gen),
+            centroid.y() + d(gen)
+        );
+
+        //Check if the random point is inside the polygon
+        if (pol.bounded_side(random_point) == CGAL::ON_UNBOUNDED_SIDE) {
+            continue;
+        }
+
+        // Create a temporary CDT to evaluate the effect of inserting the random point
+        CDT temp_cdt = cdt;
+        temp_cdt.insert(random_point);
+
+        int new_obtuse = return_obtuse(temp_cdt, pol);
+
+        //If the random point reduces obtuse triangles, insert it into the original CDT
+        if (new_obtuse < initial_obtuse) {
+            bool randomization = true;
+            cdt.insert(random_point);
+            initial_obtuse = new_obtuse;
+            obtuse_reduced++;
+            steiner_points_x_2.push_back(random_point.x());
+            steiner_points_y_2.push_back(random_point.y());
+        }
+    }
+
+    printf("Randomization completed. Obtuse triangles reduced by %d.\n", obtuse_reduced);
+}
+
 void local_method(CDT &cdt, Polygon &pol, int L) {
   int count = 0;
 
+  // Start timing
+  auto start_time = std::chrono::steady_clock::now();
   while (count < L) {
     int num_of_obtuse_before = return_obtuse(cdt, pol);
 
@@ -901,6 +989,16 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
       }
     }
     count++;
+    //Check elapsed time
+      auto current_time = std::chrono::steady_clock::now();
+      auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+
+      //If 10-15 seconds have passed with no improvement calling randomization
+      if (elapsed_seconds >= 60) {
+          printf("Deadlock detected after %ld seconds. Calling randomization...\n", elapsed_seconds);
+          randomization_insert(cdt, pol);
+          start_time = std::chrono::steady_clock::now(); 
+      }
   }
 
   return;
@@ -915,11 +1013,12 @@ void sa_method(CDT &cdt, Polygon &pol, double alpha, double beta, int L) {
   double T = 1.0;
   bool improvement;
 
+  // Start timing
+  auto start_time = std::chrono::steady_clock::now();
   while (T > 0.0) {
     improvement = false;
 
-    for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end();
-         ++face) {
+    for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end(); ++face) {
       Point p1 = face->vertex(0)->point();
       Point p2 = face->vertex(1)->point();
       Point p3 = face->vertex(2)->point();
@@ -1006,10 +1105,16 @@ void sa_method(CDT &cdt, Polygon &pol, double alpha, double beta, int L) {
 
     T -= 1.0 / L;
 
-    // if(!improvement) {
-    //    std::cout << "Break; \n";
-    //    break;
-    // }
+      //Check elapsed time
+      auto current_time = std::chrono::steady_clock::now();
+      auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+
+      //If 10-15 seconds have passed with no improvement calling randomization
+      if (elapsed_seconds >= 60 && !improvement) {
+          printf("Deadlock detected after %ld seconds. Calling randomization...\n", elapsed_seconds);
+          randomization_insert(cdt, pol);
+          start_time = std::chrono::steady_clock::now(); 
+      }
   }
 }
 
@@ -1319,8 +1424,13 @@ bool check_for_closed_constraints(json::array constraints, std::vector<int> regi
 }
 
 
+
 int main(int argc, char *argv[]) {
   // Check for correct arguments
+  bool preselected_params = true;
+  bool delaunay = true;
+  std::string method; 
+
   if (argc < 5) {
     std::cout << "Error" << std::endl;
     return 1;
@@ -1333,6 +1443,9 @@ int main(int argc, char *argv[]) {
       input_file = argv[++i];
     } else if (std::strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
       output_file = argv[++i];
+    }
+    if(std::strcmp(argv[i], "false") == 0){
+      preselected_params = false;
     }
   }
 
@@ -1445,16 +1558,21 @@ int main(int argc, char *argv[]) {
     }
 
     if (paralleltox_or_y == true) {
-        category = 4;          //Non-convex boundary with axis-parallel segments
+        category = 4;               //Non-convex boundary with axis-parallel segments
     } else {
-        category = 5;         //Irregular, non-convex boundary
+        category = 5;               //Irregular, non-convex boundary
     }
   }
 
+  //boost::json::object parameters;
+  if(preselected_params) {
   // Delaunay, method and parameter variebles
-  bool delaunay = data.at("delaunay").as_bool();
-  std::string method = data.at("method").as_string().c_str();
-  const json::object &parameters = data.at("parameters").as_object();
+  delaunay = data.at("delaunay").as_bool();
+  method = data.at("method").as_string().c_str();
+  //boost::json::object &parameters = data.at("parameters").as_object();
+  }
+
+  boost::json::object &parameters = data.at("parameters").as_object();
   std::string new_method;
   
   // After classifying the input and determining the category
@@ -1488,6 +1606,7 @@ int main(int argc, char *argv[]) {
   }
 
   int obtuse_count;
+
   if (delaunay == true) {
     flip_edges(cdt, boundary_polygon);
     //insert_steiner_point_between_obtuse_neighbors(cdt, boundary_polygon);
@@ -1497,55 +1616,64 @@ int main(int argc, char *argv[]) {
   // If delanay parameter is YES the we use the delanay_original cdt, if is NO
   // we use the cdt that is worked in first part of project Method
   if (new_method == "sa") {
-
-    if(method == "sa" || method == "ant") {            //An exei dothei sto input.json ws method ontws to sa h to ant tote pernoume ta argouments tou input
-    double alpha = parameters.at("alpha").as_double();
-    double beta = parameters.at("beta").as_double();
-    int L = parameters.at("L").as_int64();
-   }
+    double alpha = 5.0;
+    double beta = 0.8;
+    int L = 200;
+  
+    if(preselected_params) {
+      if(method == "sa" || method == "ant") {            //An exei dothei sto input.json ws method ontws to sa h to ant tote pernoume ta argouments tou input
+         alpha = parameters.at("alpha").as_double();
+         beta = parameters.at("beta").as_double();
+         L = parameters.at("L").as_int64();
+      }
+    } 
  
-    double best_alpha = 5.0;
-    double best_beta = 0.8;
-    int best_L = 200;
-
-    printf("Alpha:%f\n", best_alpha);
-    printf("Beta:%f\n", best_beta);
-    printf("L:%d\n", best_L);
-    sa_method(cdt, boundary_polygon, best_alpha, best_beta, best_L);
+    printf("Alpha:%f\n",  alpha);
+    printf("Beta:%f\n",   beta);
+    printf("L:%d\n", L);
+    sa_method(cdt, boundary_polygon, alpha, beta, L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
+  } 
+  else if (new_method == "ant") {
+    double alpha = 4.0;
+    double beta = 0.8;
+    double xi = 1.0;
+    double psi = 3.0;
+    double lambda = 0.5;
+    int kappa = 10;
+    int L = 200;
 
-  } else if (new_method == "ant") {
+    if(preselected_params) {
+      if(method == "ant") {
+         alpha = parameters.at("alpha").as_double();
+         beta = parameters.at("beta").as_double();
+         xi = parameters.at("xi").as_double();
+         psi = parameters.at("psi").as_double();
+         lambda = parameters.at("lambda").as_double();
+         kappa = parameters.at("kappa").as_int64();
+         L = parameters.at("L").as_int64();
+      }
+    } 
 
-    if(method == "ant") {
-    double alpha = parameters.at("alpha").as_double();
-    double beta = parameters.at("beta").as_double();
-    double xi = parameters.at("xi").as_double();
-    double psi = parameters.at("psi").as_double();
-    double lambda = parameters.at("lambda").as_double();
-    int kappa = parameters.at("kappa").as_int64();
-    int L = parameters.at("L").as_int64();
-   }
-
-    double best_alpha = 4.0;
-    double best_beta = 0.8;
-    double best_xi = 1.0;
-    double best_psi = 3.0;
-    double best_lambda = 0.5;
-    int best_kappa = 10;
-    int best_L = 200;
-
-    printf("Alpha:%f\n", best_alpha);
-    printf("Beta:%f\n", best_beta);
-    printf("Xi:%f\n", best_xi);
-    printf("Psi:%f\n", best_psi);
-    printf("Lambda:%f\n", best_lambda);
-    printf("kappa:%d\n", best_kappa);
-    printf("L:%d\n", best_L);
+    printf("Alpha:%f\n", alpha);
+    printf("Beta:%f\n", beta);
+    printf("Xi:%f\n", xi);
+    printf("Psi:%f\n", psi);
+    printf("Lambda:%f\n", lambda);
+    printf("kappa:%d\n", kappa);
+    printf("L:%d\n", L);
     //ant_method(cdt, boundary_polygon, best_alpha, best_beta, best_xi, best_psi, best_lambda, best_kappa, best_L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
 
-  } else if (new_method == "local") {
-    int L = parameters.at("L").as_int64();
+  } 
+  else if (new_method == "local") {
+    int L = 1000;
+
+    if(preselected_params){
+       L = parameters.at("L").as_int64();
+    }
+    
+    printf("L:%d\n", L);
     local_method(cdt, boundary_polygon, L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
   }
@@ -1554,6 +1682,7 @@ int main(int argc, char *argv[]) {
     steiner_points_x.push_back(return_rational(steiner_points_x_2[i]));
     steiner_points_y.push_back(return_rational(steiner_points_y_2[i]));
   }
+
   std::cout << "Number of obtuse: " << obtuse_count << std::endl;
   std::cout << "Number of steiner points: " << steiner_points_x.size() << std::endl;
 
@@ -1561,10 +1690,8 @@ int main(int argc, char *argv[]) {
   json::object output;
   output["content_type"] = "CG_SHOP_2025_Solution";
   output["instance_uid"] = instance_uid;
-  output["steiner_points_x"] =
-      json::array(steiner_points_x.begin(), steiner_points_x.end());
-  output["steiner_points_y"] =
-      json::array(steiner_points_y.begin(), steiner_points_y.end());
+  output["steiner_points_x"] = json::array(steiner_points_x.begin(), steiner_points_x.end());
+  output["steiner_points_y"] = json::array(steiner_points_y.begin(), steiner_points_y.end());
 
   json::array edges;
   int count = 0;
@@ -1627,11 +1754,10 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  //std::cout << "Count is: " << count << std::endl;
 
   output["edges"] = edges;
   output["obtuse_count"] = obtuse_count;
-  output["method"] = method;
+  output["method"] = new_method;
   output["parameters"] = parameters;
   output["randomization"] = randomization;
 
