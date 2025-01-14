@@ -20,12 +20,7 @@
 
 typedef CGAL::Exact_predicates_exact_constructions_kernel K;
 typedef CGAL::Exact_predicates_tag Itag;
-// typedef Custom_Constrained_Delaunay_triangulation_2<K, CGAL::Default, Itag>
-// CDT;
-typedef CGAL::Constrained_triangulation_plus_2<
-    Custom_Constrained_Delaunay_triangulation_2<K, CGAL::Default,
-                                                CGAL::Exact_intersections_tag>>
-    CDT;
+typedef CGAL::Constrained_triangulation_plus_2<Custom_Constrained_Delaunay_triangulation_2<K, CGAL::Default, CGAL::Exact_intersections_tag>> CDT;
 typedef CGAL::Polygon_2<K> Polygon;
 typedef K::Point_2 Point;
 typedef K::Segment_2 Edge;
@@ -34,17 +29,14 @@ typedef CDT::Face_handle Face_handle;
 
 namespace json = boost::json;
 
-std::vector<std::string>
-    steiner_points_x; // Global vector to store x-coordinates of Steiner points
-std::vector<std::string>
-    steiner_points_y; // Global vector to store y-coordinates of Steiner points
-Polygon boundary_polygon; // Polygon for the region boundary
+std::vector<std::string> steiner_points_x; // Global vector to store x-coordinates of Steiner points
+std::vector<std::string> steiner_points_y; // Global vector to store y-coordinates of Steiner points
+Polygon boundary_polygon;                  // Polygon for the region boundary
 std::vector<K::FT> steiner_points_x_2;
 std::vector<K::FT> steiner_points_y_2;
 bool randomization = false;
 
-// Fuction that help us to write the resuls on output file (convert a FT number
-// to a string)
+// Fuction that help us to write the resuls on output file (convert a FT number to a string)
 std::string FT_to_string(const K::FT &ft) {
   std::ostringstream oss;
   oss << ft;
@@ -93,43 +85,6 @@ int return_obtuse(CDT &cdt, Polygon &pol) {
     }
   }
   return count;
-}
-
-// Print how many obtuse triangles exist
-void print_obtuse(CDT &cdt, Polygon &pol) {
-  int count = 0;
-  for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end();
-       ++face) {
-    Point p1 = face->vertex(0)->point();
-    Point p2 = face->vertex(1)->point();
-    Point p3 = face->vertex(2)->point();
-    if (pol.bounded_side(CGAL::centroid(p1, p2, p3)) !=
-        CGAL::ON_UNBOUNDED_SIDE) {
-
-      if ((is_obtuse(face->vertex(0)->point(), face->vertex(1)->point(),
-                     face->vertex(2)->point())))
-        count++;
-    }
-  }
-  std::cout << "Number of obtuses is: " << count << std::endl;
-}
-
-// Function to check if the triangulation contains no more obtuse triangles
-// return true if the triangulation is valid (no more obduse edges) and false
-// otherwise
-bool triangulation_valid(CDT &cdt) {
-  // Iterate over all the  triangles
-  for (auto face_it = cdt.finite_faces_begin();
-       face_it != cdt.finite_faces_end(); ++face_it) {
-    // Vertices of the triangle
-    Point p1 = face_it->vertex(0)->point();
-    Point p2 = face_it->vertex(1)->point();
-    Point p3 = face_it->vertex(2)->point();
-    // Check if the triangle is obtuse
-    if (is_obtuse(p1, p2, p3))
-      return false;
-  }
-  return true;
 }
 
 // Function to flip each possible flipable obtuse edge in a single pass
@@ -432,6 +387,63 @@ bool find_obtuse_neighbor(CDT &cdt, Face_handle face, Face_handle &obtuse_neighb
   return false;
 }
 
+// Insert Steiner points between all neighboring obtuse faces
+void insert_steiner_point_between_obtuse_neighbors(CDT &cdt, Polygon &pol) {
+  bool found_pair = true;
+  while (found_pair) {
+    found_pair = false;
+
+    // Iterate over all faces to find pairs of neighboring obtuse faces
+    for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end();
+         ++face) {
+      Point p1 = face->vertex(0)->point();
+      Point p2 = face->vertex(1)->point();
+      Point p3 = face->vertex(2)->point();
+
+      // Check if the face is obtuse
+      if (is_obtuse(p1, p2, p3) != 0 &&
+          (boundary_polygon.bounded_side(CGAL::centroid(p1, p2, p3)) ==
+           CGAL::ON_BOUNDED_SIDE)) {
+        Face_handle obtuse_neighbor;
+        int obtuse_neighbor_idx;
+
+        // Check if there is an obtuse neighboring face
+        if (find_obtuse_neighbor(cdt, face, obtuse_neighbor,
+                                 obtuse_neighbor_idx)) {
+          // Get the points of the neighboring obtuse face
+          Point np1 = obtuse_neighbor->vertex(0)->point();
+          Point np2 = obtuse_neighbor->vertex(1)->point();
+          Point np3 = obtuse_neighbor->vertex(2)->point();
+
+          // Compute the centroids of both obtuse faces
+          Point centroid1 = CGAL::centroid(p1, p2, p3);
+          Point centroid2 = CGAL::centroid(np1, np2, np3);
+
+          // Compute the midpoint between the centroids
+          Point steiner_point = midpoint_edge(centroid1, centroid2);
+
+          // Insert the Steiner point in a CDT copy
+          CDT temp_cdt = cdt;
+          temp_cdt.insert(steiner_point);
+
+          // Insert only if the obtuse count is reduced
+          if (return_obtuse(temp_cdt, pol) < return_obtuse(cdt, pol) &&
+              (boundary_polygon.bounded_side(steiner_point) ==
+               CGAL::ON_BOUNDED_SIDE)) {
+            cdt.insert(steiner_point);
+            found_pair = true;
+            break;
+          }
+        }
+      }
+    }
+    // If there are no more obtose neigbor pairs then break
+    if (!found_pair) {
+      break;
+    }
+  }
+}
+
 bool point_not_in_vector(std::vector<Point> &points, Point p) {
   for (int i = 0; i < points.size(); i++) {
     if (points[i] == p) {
@@ -715,63 +727,6 @@ Point unify_triangles(CDT &cdt, Point p1, Point p2, Point p3, Polygon &bound) {
   }
 
   return mean;
-}
-
-// Insert Steiner points between all neighboring obtuse faces
-void insert_steiner_point_between_obtuse_neighbors(CDT &cdt, Polygon &pol) {
-  bool found_pair = true;
-  while (found_pair) {
-    found_pair = false;
-
-    // Iterate over all faces to find pairs of neighboring obtuse faces
-    for (auto face = cdt.finite_faces_begin(); face != cdt.finite_faces_end();
-         ++face) {
-      Point p1 = face->vertex(0)->point();
-      Point p2 = face->vertex(1)->point();
-      Point p3 = face->vertex(2)->point();
-
-      // Check if the face is obtuse
-      if (is_obtuse(p1, p2, p3) != 0 &&
-          (boundary_polygon.bounded_side(CGAL::centroid(p1, p2, p3)) ==
-           CGAL::ON_BOUNDED_SIDE)) {
-        Face_handle obtuse_neighbor;
-        int obtuse_neighbor_idx;
-
-        // Check if there is an obtuse neighboring face
-        if (find_obtuse_neighbor(cdt, face, obtuse_neighbor,
-                                 obtuse_neighbor_idx)) {
-          // Get the points of the neighboring obtuse face
-          Point np1 = obtuse_neighbor->vertex(0)->point();
-          Point np2 = obtuse_neighbor->vertex(1)->point();
-          Point np3 = obtuse_neighbor->vertex(2)->point();
-
-          // Compute the centroids of both obtuse faces
-          Point centroid1 = CGAL::centroid(p1, p2, p3);
-          Point centroid2 = CGAL::centroid(np1, np2, np3);
-
-          // Compute the midpoint between the centroids
-          Point steiner_point = midpoint_edge(centroid1, centroid2);
-
-          // Insert the Steiner point in a CDT copy
-          CDT temp_cdt = cdt;
-          temp_cdt.insert(steiner_point);
-
-          // Insert only if the obtuse count is reduced
-          if (return_obtuse(temp_cdt, pol) < return_obtuse(cdt, pol) &&
-              (boundary_polygon.bounded_side(steiner_point) ==
-               CGAL::ON_BOUNDED_SIDE)) {
-            cdt.insert(steiner_point);
-            found_pair = true;
-            break;
-          }
-        }
-      }
-    }
-    // If there are no more obtose neigbor pairs then break
-    if (!found_pair) {
-      break;
-    }
-  }
 }
 
 void randomization_insert(CDT &cdt, Polygon &pol) {
@@ -1131,6 +1086,7 @@ double findcircumradius(Face_handle &face) {
 
   return radius;
 }
+
 double findheight(Face_handle face) {
   // sinartiseis gia circumradius kai ipsos gia na vrethei to ρ
   Point p1 = face->vertex(0)->point();
@@ -1427,9 +1383,10 @@ bool check_for_closed_constraints(json::array constraints, std::vector<int> regi
 
 int main(int argc, char *argv[]) {
   // Check for correct arguments
-  bool preselected_params = true;
+  bool preselected_params = false;
   bool delaunay = true;
-  std::string method; 
+  boost::json::object parameters = {};
+  std::string method, best_method; 
 
   if (argc < 5) {
     std::cout << "Error" << std::endl;
@@ -1444,8 +1401,8 @@ int main(int argc, char *argv[]) {
     } else if (std::strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
       output_file = argv[++i];
     }
-    if(std::strcmp(argv[i], "false") == 0){
-      preselected_params = false;
+    if(std::strcmp(argv[i], "–preselected_params") == 0){
+      preselected_params = true;
     }
   }
 
@@ -1553,10 +1510,10 @@ int main(int argc, char *argv[]) {
     int regsize = region_boundary.size();
     int pointx = points_x[region_boundary[0]] - points_x[region_boundary[regsize - 1]];
     int pointy = points_y[region_boundary[0]] - points_y[region_boundary[regsize - 1]];
+
     if (pointx != 0 && pointy != 0) {
         paralleltox_or_y = false;
     }
-
     if (paralleltox_or_y == true) {
         category = 4;               //Non-convex boundary with axis-parallel segments
     } else {
@@ -1564,45 +1521,42 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  //boost::json::object parameters;
-  if(preselected_params) {
-  // Delaunay, method and parameter variebles
-  delaunay = data.at("delaunay").as_bool();
-  method = data.at("method").as_string().c_str();
-  //boost::json::object &parameters = data.at("parameters").as_object();
+  if(!preselected_params) {
+    // Delaunay, method and parameter variebles
+    delaunay = data.at("delaunay").as_bool();
+    method = data.at("method").as_string().c_str();
+    parameters = data.at("parameters").as_object();
   }
-
-  boost::json::object &parameters = data.at("parameters").as_object();
-  std::string new_method;
   
   // After classifying the input and determining the category
   if (category == 1) {
     printf("Case A: Convex boundary without restrictions.\n");
-    new_method = "local";
+    best_method = "local";
     printf("Choosen method: Local search.\n");
 
   } else if (category == 2) {
     printf("Case B: Convex boundary with open constraints.\n");
-    new_method = "sa";
+    best_method = "sa";
     printf("Choosen method: Simulated annealing.\n");
 
   } else if (category == 3) {
     printf("Case C: Convex boundary with closed constraints.\n");
-    new_method = "sa";
+    best_method = "sa";
     printf("Choosen method: Simulated annealing.\n");
 
   } else if (category == 4) {
     printf("Case D: Non-convex boundary with straight segments parallel to the axes.\n");
-    new_method = "sa";
+    best_method = "sa";
     printf("Choosen method: Simulated annealing.\n");
 
   } else if (category == 5) {
     printf("Case E: Non-convex boundary, irregular, not included in categories A-D.\n");
-    new_method = "local";
+    best_method = "local";
     printf("Choosen method: Local search.\n");
 
   } else {
-    printf("Unknown category. Please check input data.\n");
+    printf("Unknown category. Choosed  Simulated annealing by default.\n");
+    best_method = "sa";
   }
 
   int obtuse_count;
@@ -1615,26 +1569,31 @@ int main(int argc, char *argv[]) {
 
   // If delanay parameter is YES the we use the delanay_original cdt, if is NO
   // we use the cdt that is worked in first part of project Method
-  if (new_method == "sa") {
+  if (best_method == "sa") {
     double alpha = 5.0;
     double beta = 0.8;
     int L = 200;
   
-    if(preselected_params) {
+    if(!preselected_params) {
       if(method == "sa" || method == "ant") {            //An exei dothei sto input.json ws method ontws to sa h to ant tote pernoume ta argouments tou input
          alpha = parameters.at("alpha").as_double();
          beta = parameters.at("beta").as_double();
          L = parameters.at("L").as_int64();
       }
     } 
- 
-    printf("Alpha:%f\n",  alpha);
-    printf("Beta:%f\n",   beta);
-    printf("L:%d\n", L);
+    else{
+      parameters.emplace("alpha", 5.0);      
+      parameters.emplace("beta", 0.8);       
+      parameters.emplace("L", 200);
+    }
+    
+    printf("Alpha: %.1f\n",  alpha);
+    printf("Beta: %.1f\n",   beta);
+    printf("L: %d\n", L);
     sa_method(cdt, boundary_polygon, alpha, beta, L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
   } 
-  else if (new_method == "ant") {
+  else if (best_method == "ant") {
     double alpha = 4.0;
     double beta = 0.8;
     double xi = 1.0;
@@ -1643,7 +1602,7 @@ int main(int argc, char *argv[]) {
     int kappa = 10;
     int L = 200;
 
-    if(preselected_params) {
+    if(!preselected_params) {
       if(method == "ant") {
          alpha = parameters.at("alpha").as_double();
          beta = parameters.at("beta").as_double();
@@ -1654,26 +1613,39 @@ int main(int argc, char *argv[]) {
          L = parameters.at("L").as_int64();
       }
     } 
-
-    printf("Alpha:%f\n", alpha);
-    printf("Beta:%f\n", beta);
-    printf("Xi:%f\n", xi);
-    printf("Psi:%f\n", psi);
-    printf("Lambda:%f\n", lambda);
-    printf("kappa:%d\n", kappa);
-    printf("L:%d\n", L);
+    else{
+      parameters.emplace("alpha", 4.0);      
+      parameters.emplace("beta", 0.8);    
+      parameters.emplace("xi", 1.0);      
+      parameters.emplace("psi", 3.0);      
+      parameters.emplace("lambda", 0.5);
+      parameters.emplace("kappa", 10);
+      parameters.emplace("L", 200);
+    }
+   
+    std::cout << std::fixed << std::setprecision(1);
+    printf("Alpha: %.1f\n", alpha);
+    printf("Beta: %.1f\n", beta);
+    printf("Xi: %.1f\n", xi);
+    printf("Psi: %.1f\n", psi);
+    printf("Lambda: %.1f\n", lambda);
+    printf("kappa: %d\n", kappa);
+    printf("L: %d\n", L);
     //ant_method(cdt, boundary_polygon, best_alpha, best_beta, best_xi, best_psi, best_lambda, best_kappa, best_L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
 
   } 
-  else if (new_method == "local") {
+  else if (best_method == "local") {
     int L = 1000;
 
-    if(preselected_params){
+    if(!preselected_params){
        L = parameters.at("L").as_int64();
     }
+    else{
+      parameters.emplace("L", 1000);
+    }
     
-    printf("L:%d\n", L);
+    printf("L: %d\n", L);
     local_method(cdt, boundary_polygon, L);
     obtuse_count = return_obtuse(cdt, boundary_polygon);
   }
@@ -1696,8 +1668,7 @@ int main(int argc, char *argv[]) {
   json::array edges;
   int count = 0;
 
-  for (auto edge = cdt.finite_edges_begin(); edge != cdt.finite_edges_end();
-       ++edge) {
+  for (auto edge = cdt.finite_edges_begin(); edge != cdt.finite_edges_end(); ++edge) {
     CDT::Face_handle face = edge->first;
     int idx = edge->second;
     count++;
@@ -1707,9 +1678,7 @@ int main(int argc, char *argv[]) {
     int v1, v2;
     Point midpoint((p1.x() + p2.x()) / 2, (p1.y() + p2.y()) / 2);
     if (boundary_polygon.bounded_side(midpoint) != CGAL::ON_UNBOUNDED_SIDE) {
-
       for (int i = 0; i < points.size(); ++i) {
-
         if (points[i] == p1) {
           v1 = i;
           break;
@@ -1719,7 +1688,6 @@ int main(int argc, char *argv[]) {
       if (v1 == -1) {
         for (int i = 0; i < steiner_points_x_2.size(); ++i) {
           Point steiner(steiner_points_x_2[i], steiner_points_y_2[i]);
-
           if (steiner == p1) {
             v1 = num_points + i;
             break;
@@ -1735,10 +1703,8 @@ int main(int argc, char *argv[]) {
         v2 = -1;
       }
       if (v2 == -1) {
-
         for (int i = 0; i < steiner_points_x_2.size(); ++i) {
           Point steiner(steiner_points_x_2[i], steiner_points_y_2[i]);
-
           if (steiner == p2) {
             v2 = num_points + i;
             break;
@@ -1746,18 +1712,15 @@ int main(int argc, char *argv[]) {
           v2 = -1;
         }
       }
-
       if (v1 != -1 && v2 != -1) {
-
         edges.push_back({v1, v2});
       }
     }
   }
 
-
   output["edges"] = edges;
   output["obtuse_count"] = obtuse_count;
-  output["method"] = new_method;
+  output["method"] = best_method;
   output["parameters"] = parameters;
   output["randomization"] = randomization;
 
