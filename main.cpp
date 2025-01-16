@@ -1218,25 +1218,7 @@ void track_changed_triangles_and_conflicts(CDT &originalcdt, CDT &newCdt, std::v
 }
 
 
-bool equal_faces_points(Point f1p1, Point f1p2, Point f1p3, Point f2p1,
-                        Point f2p2, Point f2p3) {
 
-  int count = 0;
-
-  if (f1p1 == f2p1 || f1p1 == f2p2 || f1p1 == f2p3) {
-    count++;
-  }
-  if (f1p2 == f2p1 || f1p2 == f2p2 || f1p2 == f2p3) {
-    count++;
-  }
-  if (f1p2 == f2p1 || f1p2 == f2p2 || f1p2 == f2p3) {
-    count++;
-  }
-  if (count == 3) {
-    return true;
-  }
-  return false;
-}
 
 void track_changed_triangles_and_conflicts(std::vector<std::vector<Point>> &conflicts,std::vector<int> &array_of_obtuse_am,std::vector<Point> &points_inserted,
     Point point_coord, std::vector<double> &pher_per_point, double pheromone_val,  int num_of_obtuse,
