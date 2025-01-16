@@ -189,7 +189,7 @@ int min(int r1, int r2, int r3, int r4, int r5, int r6) {
   return min_num;
 }
 
-int min_local(int r1, int r2, int r3, int r4, int r5) {
+int min_local(int r1, int r2, int r3, int r4) {
   int min = r1;
   int min_num = 1;
   if (r2 < min) {
@@ -204,10 +204,10 @@ int min_local(int r1, int r2, int r3, int r4, int r5) {
     min = r4;
     min_num = 4;
   }
-  if (r5 < min) {
-    min = r5;
-    min_num = 5;
-  }
+  // if (r5 < min) {
+  //   min = r5;
+  //   min_num = 5;
+  // }
   return min_num;
 }
 
@@ -813,11 +813,12 @@ void randomization_insert(CDT &cdt, Polygon &pol) {
     printf("Randomization completed. Obtuse triangles reduced by %d.\n", obtuse_reduced);
 }
 
+
+
 void local_method(CDT &cdt, Polygon &pol, int L) {
   int count = 0;
-
-  // Start timing
   auto start_time = std::chrono::steady_clock::now();
+
   while (count < L) {
     int num_of_obtuse_before = return_obtuse(cdt, pol);
 
@@ -829,6 +830,7 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
       copy3 = cdt;
       copy4 = cdt;
       copy5 = cdt;
+      // printf("im stuck\n");
 
       Point p1 = face->vertex(0)->point();
       Point p2 = face->vertex(1)->point();
@@ -860,23 +862,24 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
         copy2.insert_no_flip(steiner_point);
         if (pol.bounded_side(CGAL::circumcenter(p1, p2, p3)) !=
             CGAL::ON_UNBOUNDED_SIDE) {
-          insert_circumcenter(copy3, p1, p2, p3, pol);
+          // insert_circumcenter(copy3, p1, p2, p3, pol);
+          copy3.insert(CGAL::circumcenter(p1,p2,p3));
         }
         copy4.insert_no_flip(midpoint);
-        Point mean = unify_triangles(copy5, p1, p2, p3, pol);
+        // Point mean = unify_triangles(copy5, p1, p2, p3, pol);
 
         int ret1 = return_obtuse(copy1, pol);
         int ret2 = return_obtuse(copy2, pol);
         int ret3 = return_obtuse(copy3, pol);
         int ret4 = return_obtuse(copy4, pol);
-        int ret5 = return_obtuse(copy5, pol);
+        // int ret5 = return_obtuse(copy5, pol);
 
-        int min_ret = min_local(ret1, ret2, ret3, ret4, ret5);
+        int min_ret = min_local(ret1, ret2, ret3, ret4);
 
         if (min_ret == 1) {
           if (ret1 < num_of_obtuse_before) {
             // cdt.insert(CGAL::centroid(p1,p2,p3));
-            cdt.clear();
+            
             cdt = copy1;
 
             // Save the centroid coordinates
@@ -889,7 +892,7 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
         } else if (min_ret == 2) {
           if (ret2 < num_of_obtuse_before) {
             // cdt.insert_no_flip(steiner_point);
-            cdt.clear();
+            
             cdt = copy2;
 
             // Save the steiner point coordinates
@@ -903,7 +906,7 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
           if (ret3 < num_of_obtuse_before) {
             // cdt.insert(CGAL::circumcenter(p1,p2,p3));
 
-            cdt.clear();
+            
             cdt = copy3;
 
             // Save the circumcenter coordinates
@@ -916,7 +919,7 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
         } else if (min_ret == 4) {
           if (ret4 < num_of_obtuse_before) {
 
-            cdt.clear();
+            
             cdt = copy4;
 
             // Save the midpoint coordinates
@@ -926,23 +929,25 @@ void local_method(CDT &cdt, Polygon &pol, int L) {
 
             break;
           }
-        } else if (min_ret == 5) {
+        // } else if (min_ret == 5) {
 
-          if (ret5 < num_of_obtuse_before) {
+        //   if (ret5 < num_of_obtuse_before) {
 
-            cdt.clear();
-            cdt = copy5;
+        //     cdt.clear();
+        //     cdt = copy5;
 
-            // Save the midpoint coordinates
+        //     // Save the midpoint coordinates
 
-            steiner_points_x_2.push_back(mean.x());
-            steiner_points_y_2.push_back(mean.y());
+        //     steiner_points_x_2.push_back(mean.x());
+        //     steiner_points_y_2.push_back(mean.y());
 
-            return;
-          }
+        //     return;
+        //   }
         }
       }
     }
+
+
     count++;
     //Check elapsed time
       auto current_time = std::chrono::steady_clock::now();
@@ -1211,101 +1216,407 @@ void track_changed_triangles_and_conflicts(CDT &originalcdt, CDT &newCdt, std::v
     }
   }
 }
-// void antwork(CDT &cdt,Polygon pol,double midpher,double projpher,double
-// circpher,int xi, int psi,double alpha,double beta,std::vector<double>
-// &cyclephersums){
-//     srand(time(0));
-//     int amountofobtuse=return_obtuse(cdt,pol);
-//     int random_triangle=rand()%amountofobtuse;
-//     int count=0;
-//     for (auto face=cdt.finite_faces_begin();
-//     face!=cdt.finite_faces_end();face++){
-//         Point p1=face->vertex(0)->point();
-//         Point p2=face->vertex(1)->point();
-//         Point p3=face->vertex(2)->point();
-//         int obtuse_angle=is_obtuse(p1,p2,p3);
-//         if (obtuse_angle !=0 && (pol.bounded_side(CGAL::centroid(p1,p2,p3))
-//         !=CGAL::ON_UNBOUNDED_SIDE)){
 
-//         if (count==random_triangle){
-//         Face_handle curface=face;
-//         double facecr=findcircumradius(curface)/findheight(curface);
 
-//         double hmidpoint=3-2*facecr/facecr;
-//         if (hmidpoint<0){
-//             hmidpoint=0;
-//         }
-//         double hproj=(facecr-1)/facecr;
-//         if (hproj<0){
-//             hproj=0;
-//         }
-//         int hcirc=facecr/(2+facecr);
-//         double sumofmethods=pow(midpher,xi)*pow(hmidpoint,psi) +
-//         pow(projpher,xi)*pow(hproj,psi) + pow(midpher,xi)+pow(hcirc,psi);
-//         double thmid=pow(midpher,xi)*pow(hmidpoint,psi);
-//         double thproj=pow(projpher,xi)*pow(hproj,psi);
-//         double thcirc=pow(circpher,xi)+pow(hcirc,psi);
-//         double probmid=thmid/sumofmethods;
-//         double probproj=probmid+thproj/sumofmethods;
-//         double probcirc=probproj+thcirc/sumofmethods;
-//         double random_num=rand()/(RAND_MAX);
-//         Point midpoint;
-//         Point projection;
-//         cdt.clear();
+bool equal_faces_points(Point f1p1, Point f1p2, Point f1p3, Point f2p1,
+                        Point f2p2, Point f2p3) {
 
-//         if (obtuse_angle == 1)
-//                 {
-//                     projection = project_edge(p1, p2, p3); // Bisect edge
-//                     (p2, p3) midpoint = midpoint_edge(p2, p3);
-//                 }
-//                 else if (obtuse_angle == 2)
-//                 {
-//                     projection = project_edge(p2, p3, p1); // Bisect edge
-//                     (p3, p1) midpoint = midpoint_edge(p3, p1);
-//                 }
-//                 else if (obtuse_angle == 3)
-//                 {
-//                     projection = project_edge(p3, p1, p2); // Bisect edge
-//                     (p1, p2) midpoint = midpoint_edge(p1, p2);
-//                 }
+  int count = 0;
 
-//         if (random_num<=probmid){
-//             cdt.insert_no_flip (midpoint);
+  if (f1p1 == f2p1 || f1p1 == f2p2 || f1p1 == f2p3) {
+    count++;
+  }
+  if (f1p2 == f2p1 || f1p2 == f2p2 || f1p2 == f2p3) {
+    count++;
+  }
+  if (f1p2 == f2p1 || f1p2 == f2p2 || f1p2 == f2p3) {
+    count++;
+  }
+  if (count == 3) {
+    return true;
+  }
+  return false;
+}
 
-//         }
-//         else if(random_num<=probproj){
-//             cdt.insert_no_flip (projection);
+void track_changed_triangles_and_conflicts(std::vector<std::vector<Point>> &conflicts,std::vector<int> &array_of_obtuse_am,std::vector<Point> &points_inserted,
+    Point point_coord, std::vector<double> &pher_per_point, double pheromone_val,  int num_of_obtuse,
+    std::vector<int> &method_per_point,int method_used, std::vector<Point> changed_faces) {
+  
+  // for (auto face = originalcdt.finite_faces_begin();
+  //      face != originalcdt.finite_faces_end(); face++) {
+  //   Face_handle facedup;
 
-//         }
-//         else if (random_num<=probcirc){
+  //   facedup = face;
+  //   int check = 0;
+  //   for (auto face2 = newCdt.finite_faces_begin();
+  //        face2 != newCdt.finite_faces_end(); face2++) {
+  //     Face_handle facedup2;
+  //     facedup2 = face2;
 
-//         }
-//         }
-//         count++;
-//         }
+  //     if (equal_faces_points(
+  //             facedup->vertex(0)->point(), facedup->vertex(1)->point(),
+  //             facedup->vertex(2)->point(), facedup2->vertex(0)->point(),
+  //             facedup2->vertex(1)->point(),
+  //             facedup2->vertex(2)->point()) == true) {
+  //       check = 1;
+  //       break;
+  //     }
+  //   }
+  //   if (check == 1) {
+  //     continue;
+  //   } else {
+  //     changed_faces.push_back(face->vertex(0)->point());
+  //     changed_faces.push_back(face->vertex(1)->point());
+  //     changed_faces.push_back(face->vertex(2)->point());
+  //   }
 
-//     }
-// }
+  //   // Face_handle new_face=newCdt.locate(face->vertex(0)->point());
+  //   // if (new_face!=newCdt.faces_end() &&!check_faces_points(face,new_face)){
+  //   //   changed_faces.push_back(face);
+  //   // }
+  // }
+  bool conflict = false;
+  int conflict_index = -1;
+  if (changed_faces.size() > 0) {
+    for (int i = 0; i < conflicts.size(); i++) {
+      std::vector<Point> temp_vector=conflicts[i];
+      
+      for (int j = 0; j < temp_vector.size(); j = j + 3) {
+        for (int k = 0; i < changed_faces.size(); k = k + 3) {
+          if (equal_faces_points(temp_vector[i], temp_vector[j + 1],
+                                 temp_vector[j + 2], changed_faces[k],
+                                 changed_faces[k + 1],
+                                 changed_faces[k + 2]) == true) {
+            conflict = true;
+            conflict_index = i;
+            break;
+          }
+          if (conflict == true) {
+            break;
+          }
+        }
+        if (conflict == true) {
+          break;
+        }
+      }
+      if (conflict == true) {
+        if (num_of_obtuse < array_of_obtuse_am[conflict_index]) {
+          array_of_obtuse_am.erase(array_of_obtuse_am.begin() + conflict_index);
+          conflicts.erase(conflicts.begin() + conflict_index);
+          pher_per_point.erase(pher_per_point.begin() + conflict_index);
+          method_per_point.erase(method_per_point.begin() + conflict_index);
+          points_inserted.erase(points_inserted.begin() + conflict_index);
+          // phertracker.erase()
+          //...
+          conflicts.push_back(changed_faces);
+          array_of_obtuse_am.push_back(num_of_obtuse);
+        }
+          
 
-void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi, double psi, double lambda, int kappa, int L) {
+      } 
+      else {
+        conflicts.push_back(changed_faces);
+        array_of_obtuse_am.push_back(num_of_obtuse);
+        pher_per_point.push_back(pheromone_val);
+        method_per_point.push_back(method_used);
+        points_inserted.push_back(point_coord);
+        
+      }
+    }
+  }
+  
+}
+
+void insert_circumcenter_for_ant(CDT &cdt, Point p1, Point p2, Point p3,
+                         Polygon &bound,std::vector<Point> &faces_changed) {
+  Face_handle face;
+  for (auto face2 = cdt.finite_faces_begin(); face2 != cdt.finite_faces_end();
+       face2++) {
+    Point facep1 = face2->vertex(0)->point();
+    Point facep2 = face2->vertex(1)->point();
+    Point facep3 = face2->vertex(2)->point();
+    if ((facep1 == p1 && facep2 == p2 && facep3 == p3)) {
+      face = face2;
+
+      break;
+    }
+  }
+  Point circcenter = CGAL::circumcenter(p1, p2, p3);
+  for (int i = 0; i < 3; i++) {
+    Face_handle neighbor = face->neighbor(i);
+    if (cdt.is_infinite(neighbor) == true) {
+      continue;
+    }
+    int constrained = 0;
+    // for (int j=0; j<3; j++){
+    //     if (neighbor->is_constrained(j)==true){
+    //         constrained=1;
+    //     }
+    // }
+    // if (constrained==1){
+    //     continue;                                            //elegxos an o
+    //     geitonas periexei constraints
+    // mexri tora den dhmiourgei provlimata an den elegxoume otan kanoume insert
+    // nea kai meta remove constraint an dhmiourgountai provlimata dokimaste me
+    // uncomment
+    // }
+    int index_n;
+    index_n = neighbor->index(face);
+    Point np1 = neighbor->vertex((index_n + 2) % 3)->point();
+    Point np2 = neighbor->vertex(index_n)->point();
+    Point np3 = neighbor->vertex((index_n + 1) % 3)->point();
+    Polygon npolygon;
+    npolygon.push_back(np1); // DHMIOURGIA POLIGONOY GEITONON
+    npolygon.push_back(np2);
+    npolygon.push_back(np3);
+    std::vector<Point> points;
+    std::vector<CDT::Vertex_handle> vertices;
+
+    if ((npolygon.bounded_side(circcenter) != CGAL::ON_UNBOUNDED_SIDE) &&
+        (bound.bounded_side(CGAL::centroid(np1, np2, np3)) !=
+         CGAL::ON_UNBOUNDED_SIDE)) {
+      vertices.clear();
+      points.clear();
+      points.push_back(face->vertex((i + 2) % 3)->point());
+      points.push_back(face->vertex(i)->point());
+      points.push_back(face->vertex((i + 1) % 3)->point());
+      points.push_back(np2);
+      vertices.push_back(face->vertex((i + 2) % 3));
+      vertices.push_back(face->vertex(i));
+      vertices.push_back(face->vertex((i + 1) % 3));
+      vertices.push_back(neighbor->vertex(index_n));
+
+      for (int k = 0; k < vertices.size(); k++) {
+
+        CDT::Vertex_handle vr = vertices[k];
+        CDT::Edge_circulator circ = vr->incident_edges();
+        if (check_if_vertex_constrained(cdt, circ) ==
+            false) { // ELEGXOS VERTICES TOY POLIGOUNOU POU ANHKOYN SE
+                     // CONSTRAINT. AN OXI MPOREI NA AFAIRETHEI. ALLIOS OXI
+          cdt.remove_no_flip(vr);
+        }
+      }
+
+      std::vector<CDT::Constraint_id> constraints;
+
+      for (int k = 0; k < points.size() - 1; k++) {
+        CDT::Constraint_id constraint_id =
+            cdt.insert_constraint(points[k], points[k + 1]);
+        constraints.push_back(
+            constraint_id); // EISAGOSI SIMEION POLIGONOY ME CONSTRAINT
+      }
+
+      CDT::Constraint_id cid =
+          cdt.insert_constraint(points[0], points[points.size() - 1]);
+
+      constraints.push_back(cid);
+      cdt.insert_no_flip(circcenter);
+
+      int obtuse_count;
+      int new_obtuse_count;
+      do {
+        obtuse_count = return_obtuse(cdt, bound);
+        flip_edges(cdt, bound);
+        new_obtuse_count = return_obtuse(
+            cdt, bound); // EISAGOGI SIMEIOY KAI ELEGXOS ME FLIP AN EXEI MPOREI
+                         // NA AFAIRETHEI TO EDGE POY DIAXORISEI TOYS GEITONES
+                         // ME FLIP TOY. AN TO EDGE POY DIAXORISEI TA TRIGONA
+                         // DEN MPOREI NA AFAIRETHEI EPEIDI KAI TA DIO VERTICES
+                         // ANHKOYN SE KAPOIO CONSTRAINT
+
+      } while (obtuse_count > new_obtuse_count);
+
+      for (int k = 0; k < constraints.size(); k++) {
+        cdt.remove_constraint(constraints[k]); // AFAIRESI CONSTRAINTS
+      }
+      faces_changed.push_back(face->vertex(0)->point()); 
+      faces_changed.push_back(face->vertex(1)->point());
+      faces_changed.push_back(face->vertex(2)->point());
+      faces_changed.push_back(np1); 
+      faces_changed.push_back(np2);
+      faces_changed.push_back(np3);
+
+      return;
+    }
+  }
+}
+    
+void antwork(CDT &cdt,Polygon pol,std::vector<double> phertracker,std::vector<Point> points_inserted,
+std::vector<std::vector<Point>> &faces_changed_per_ant,std::vector<int> &obtuse_am_per_point,std::vector<int> &method_per_point,int xi, int psi,double alpha,double beta ){
+  std::vector<Point> faces_changed;
+    srand(time(0));
+    int amountofobtuse=return_obtuse(cdt,pol);
+    int random_triangle=rand()%amountofobtuse;
+    int count=0;
+    for (auto face=cdt.finite_faces_begin();
+    face!=cdt.finite_faces_end();face++){
+        Point p1=face->vertex(0)->point();
+        Point p2=face->vertex(1)->point();
+        Point p3=face->vertex(2)->point();
+        int obtuse_angle=is_obtuse(p1,p2,p3);
+        if (obtuse_angle !=0 && (pol.bounded_side(CGAL::centroid(p1,p2,p3))
+        !=CGAL::ON_UNBOUNDED_SIDE)){
+
+        if (count==random_triangle){
+        Face_handle curface=face;
+        double facecr=findcircumradius(curface)/findheight(curface);
+
+        double hmidpoint=3-2*facecr/facecr;
+        if (hmidpoint<0){
+            hmidpoint=0;
+        }
+        double hproj=(facecr-1)/facecr;
+        if (hproj<0){
+            hproj=0;
+        }
+        int hcirc=facecr/(2+facecr);
+        double sumofmethods=pow(phertracker[1],xi)*pow(hmidpoint,psi) +
+        pow(phertracker[0],xi)*pow(hproj,psi) + pow(phertracker[2],xi)+pow(hcirc,psi);
+        double thmid=pow(phertracker[1],xi)*pow(hmidpoint,psi);
+        double thproj=pow(phertracker[0],xi)*pow(hproj,psi);
+        double thcirc=pow(phertracker[2],xi)+pow(hcirc,psi);
+        double probmid=thmid/sumofmethods;
+        double probproj=probmid+thproj/sumofmethods;
+        double probcirc=probproj+thcirc/sumofmethods;
+        double random_num=rand()/(RAND_MAX);
+        Point midpoint;
+        Point projection;
+        cdt.clear();
+
+        if (obtuse_angle == 1)
+                {
+                    projection = project_edge(p1, p2, p3); // Bisect edge
+                    midpoint = midpoint_edge(p2, p3);
+                }
+                else if (obtuse_angle == 2)
+                {
+                    projection = project_edge(p2, p3, p1); // Bisect edge
+                    midpoint = midpoint_edge(p3, p1);
+                }
+                else if (obtuse_angle == 3)
+                {
+                    projection = project_edge(p3, p1, p2); // Bisect edge
+                    midpoint = midpoint_edge(p1, p2);
+                }
+
+        if (random_num<=probmid){
+          faces_changed.push_back(face->vertex(0)->point());
+          faces_changed.push_back(face->vertex(1)->point());
+          faces_changed.push_back(face->vertex(2)->point());
+          Face_handle neighbor=face->neighbor(obtuse_angle-1);
+          if (cdt.is_infinite(neighbor) == false){
+            faces_changed.push_back(neighbor->vertex(0)->point());
+            faces_changed.push_back(neighbor->vertex(1)->point());
+            faces_changed.push_back(neighbor->vertex(2)->point());
+
+          }
+          cdt.insert_no_flip (midpoint);
+          int num_of_obtuse=return_obtuse(cdt,pol);
+          double pher_val=1/(alpha*num_of_obtuse + beta* (steiner_points_x_2.size()+1));
+          track_changed_triangles_and_conflicts(faces_changed_per_ant,obtuse_am_per_point,points_inserted,midpoint,phertracker,pher_val,num_of_obtuse,method_per_point,1,faces_changed);
+
+
+        }
+        else if(random_num<=probproj){
+          faces_changed.push_back(face->vertex(0)->point());
+          faces_changed.push_back(face->vertex(1)->point());
+          faces_changed.push_back(face->vertex(2)->point());
+          Face_handle neighbor=face->neighbor(obtuse_angle-1);
+          if (cdt.is_infinite(neighbor) == false){
+            faces_changed.push_back(neighbor->vertex(0)->point());
+            faces_changed.push_back(neighbor->vertex(1)->point());
+            faces_changed.push_back(neighbor->vertex(2)->point());
+            int num_of_obtuse=return_obtuse(cdt,pol);
+            double pher_val=1/(alpha*num_of_obtuse + beta* (steiner_points_x_2.size()+1));
+            track_changed_triangles_and_conflicts(faces_changed_per_ant,obtuse_am_per_point,points_inserted,projection,phertracker,pher_val,num_of_obtuse,method_per_point,0,faces_changed);
+          }
+            cdt.insert_no_flip (projection);
+
+        }
+        else if (random_num<=probcirc){
+          Point circec=CGAL::circumcenter(p1,p2,p3);
+          std::vector<Point> changed_faces;
+          insert_circumcenter_for_ant(cdt,p1,p2,p3,pol,changed_faces);
+          
+          if (changed_faces.size()>0){
+
+          int num_of_obtuse=return_obtuse(cdt,pol);
+          double pher_val=1/(alpha* num_of_obtuse+ beta* (steiner_points_x_2.size()+1));
+          track_changed_triangles_and_conflicts(faces_changed_per_ant,obtuse_am_per_point,points_inserted,circec,phertracker,pher_val,num_of_obtuse,method_per_point,2,faces_changed);
+          }
+        }
+        }
+        count++;
+        }
+        int num_obtuse;
+        
+
+    }
+}
+
+void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi,
+               double psi, double lambda, int kappa, int L) {
   int cycleamount = 50;
   int bestobtcount = return_obtuse(cdt, pol);
+  double evap=0.5;
   std::vector<double> phertracker;
-  phertracker.push_back(0);
-  phertracker.push_back(0);
-  phertracker.push_back(0);
+  std::vector<int> point_method;
+  std::vector<double> pher_per_ant;
+  std::vector<std::vector<Point>> conflicts;
+  std::vector<Point> points_inserted;
+  std::vector<int> obtuse_per_ant;
+  int num_of_obtuse=return_obtuse(cdt,pol);
+  phertracker.push_back(0.5);                     //projection pher
+  phertracker.push_back(0.5);                     //midpoint pher
+  phertracker.push_back(0.5);                     //circumcenter pher
   CDT besttriang;
   for (int i = 0; i < CYCLE_MAX; i++) {
+    pher_per_ant.clear();
+    points_inserted.clear();
+    conflicts.clear();
+    point_method.clear();
+    obtuse_per_ant.clear();
+    CDT copy = cdt;
 
     for (int j = 0; j < 50; i++) {
 
-      CDT copy = cdt;
-      // antwork(cdt,pol);
+      
+      antwork(cdt,pol,pher_per_ant,points_inserted,conflicts,obtuse_per_ant,point_method,xi,psi,alpha,beta);
     }
+    for (int k=0; k<phertracker.size(); k++){
+      phertracker[k]=evap*phertracker[k];         //evaporation
+    }
+    for (int k=0; k<pher_per_ant.size(); k++){
+      phertracker[k] = phertracker[k] + pher_per_ant[k];      //addition of pheromone to each method
+    }
+    for (int k=0; k<points_inserted.size();k++){
+      if (point_method[k]==0 || point_method[k]==1){
+        cdt.insert_no_flip(points_inserted[k]);
+
+      }
+      else{
+        copy.insert(points_inserted[k]);
+      }
+      
+      
+    }
+    int new_num_of_obtuse= return_obtuse(copy,pol);
+    if (new_num_of_obtuse<num_of_obtuse){
+      cdt=copy;
+      num_of_obtuse=new_num_of_obtuse;
+      for (int k=0; k<points_inserted.size(); k++){
+        steiner_points_x_2.push_back(points_inserted[k].x());
+        steiner_points_y_2.push_back(points_inserted[k].y());
+
+      }
+
+    }
+
   }
   // check energy
   // update pheromone
 }
+
 
 bool check_for_closed_constraints(json::array constraints, std::vector<int> region_bound) {
     std::queue<int> fifo_queue;
@@ -1514,7 +1825,7 @@ int main(int argc, char *argv[]) {
     if (pointx != 0 && pointy != 0) {
         paralleltox_or_y = false;
     }
-    if (paralleltox_or_y == true) {
+    if (paralleltox_or_y == true && num_constraints==0) {
         category = 4;               //Non-convex boundary with axis-parallel segments
     } else {
         category = 5;               //Irregular, non-convex boundary
