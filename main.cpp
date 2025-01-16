@@ -1867,7 +1867,7 @@ int main(int argc, char *argv[]) {
     double beta = 0.8;
     int L = 200;
   
-    if(!preselected_params) {
+    if(preselected_params==true) {
       if(method == "sa" || method == "ant") {            //An exei dothei sto input.json ws method ontws to sa h to ant tote pernoume ta argouments tou input
          alpha = parameters.at("alpha").as_double();
          beta = parameters.at("beta").as_double();
