@@ -813,8 +813,6 @@ void randomization_insert(CDT &cdt, Polygon &pol) {
     printf("Randomization completed. Obtuse triangles reduced by %d.\n", obtuse_reduced);
 }
 
-
-
 void local_method(CDT &cdt, Polygon &pol, int L) {
   int count = 0;
   auto start_time = std::chrono::steady_clock::now();
@@ -1217,9 +1215,6 @@ void track_changed_triangles_and_conflicts(CDT &originalcdt, CDT &newCdt, std::v
   }
 }
 
-
-
-
 void track_changed_triangles_and_conflicts(std::vector<std::vector<Point>> &conflicts,std::vector<int> &array_of_obtuse_am,std::vector<Point> &points_inserted,
     Point point_coord, std::vector<double> &pher_per_point, double pheromone_val,  int num_of_obtuse,
     std::vector<int> &method_per_point,int method_used, std::vector<Point> changed_faces) {
@@ -1309,8 +1304,7 @@ void track_changed_triangles_and_conflicts(std::vector<std::vector<Point>> &conf
   
 }
 
-void insert_circumcenter_for_ant(CDT &cdt, Point p1, Point p2, Point p3,
-                         Polygon &bound,std::vector<Point> &faces_changed) {
+void insert_circumcenter_for_ant(CDT &cdt, Point p1, Point p2, Point p3, Polygon &bound,std::vector<Point> &faces_changed) {
   Face_handle face;
   for (auto face2 = cdt.finite_faces_begin(); face2 != cdt.finite_faces_end();
        face2++) {
@@ -1536,8 +1530,7 @@ std::vector<std::vector<Point>> &faces_changed_per_ant,std::vector<int> &obtuse_
     }
 }
 
-void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi,
-               double psi, double lambda, int kappa, int L) {
+void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi, double psi, double lambda, int kappa, int L) {
   int cycleamount = 50;
   int bestobtcount = return_obtuse(cdt, pol);
   double evap=0.5;
@@ -1598,7 +1591,6 @@ void antmethod(CDT &cdt, Polygon &pol, double alpha, double beta, double xi,
   // check energy
   // update pheromone
 }
-
 
 bool check_for_closed_constraints(json::array constraints, std::vector<int> region_bound) {
     std::queue<int> fifo_queue;
@@ -1671,7 +1663,6 @@ bool check_for_closed_constraints(json::array constraints, std::vector<int> regi
     }
     return false;
 }
-
 
 
 int main(int argc, char *argv[]) {
@@ -1814,7 +1805,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if(!preselected_params) {
+  if(preselected_params) {
     // Delaunay, method and parameter variebles
     delaunay = data.at("delaunay").as_bool();
     method = data.at("method").as_string().c_str();
@@ -1824,7 +1815,7 @@ int main(int argc, char *argv[]) {
   // After classifying the input and determining the category
   if (category == 1) {
     printf("Case A: Convex boundary without restrictions.\n");
-    best_method = "local";
+    best_method = "sa";
     printf("Choosen method: Local search.\n");
 
   } else if (category == 2) {
@@ -1867,7 +1858,7 @@ int main(int argc, char *argv[]) {
     double beta = 0.8;
     int L = 200;
   
-    if(preselected_params==true) {
+    if(preselected_params) {
       if(method == "sa" || method == "ant") {            //An exei dothei sto input.json ws method ontws to sa h to ant tote pernoume ta argouments tou input
          alpha = parameters.at("alpha").as_double();
          beta = parameters.at("beta").as_double();
@@ -1895,7 +1886,7 @@ int main(int argc, char *argv[]) {
     int kappa = 10;
     int L = 200;
 
-    if(!preselected_params) {
+    if(preselected_params) {
       if(method == "ant") {
          alpha = parameters.at("alpha").as_double();
          beta = parameters.at("beta").as_double();
@@ -1931,7 +1922,7 @@ int main(int argc, char *argv[]) {
   else if (best_method == "local") {
     int L = 1000;
 
-    if(!preselected_params){
+    if(preselected_params){
        L = parameters.at("L").as_int64();
     }
     else{
